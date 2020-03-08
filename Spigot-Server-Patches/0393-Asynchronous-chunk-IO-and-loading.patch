@@ -1,4 +1,4 @@
-From 8b70c99a921260236a4ae3fa896eb675f9c6d266 Mon Sep 17 00:00:00 2001
+From 0db490e14e4a9fc3a85019edc67822926ecf9589 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 13 Jul 2019 09:23:10 -0700
 Subject: [PATCH] Asynchronous chunk IO and loading
@@ -121,12 +121,12 @@ tasks required to be executed by the chunk load task (i.e lighting
 and some poi tasks).
 
 diff --git a/src/main/java/co/aikar/timings/WorldTimingsHandler.java b/src/main/java/co/aikar/timings/WorldTimingsHandler.java
-index 3a79cde59..8de6c4816 100644
+index e41083f14..8a3f30c36 100644
 --- a/src/main/java/co/aikar/timings/WorldTimingsHandler.java
 +++ b/src/main/java/co/aikar/timings/WorldTimingsHandler.java
-@@ -63,6 +63,17 @@ public class WorldTimingsHandler {
-     public final Timing chunkRangeCheckBig;
-     public final Timing chunkRangeCheckSmall;
+@@ -62,6 +62,17 @@ public class WorldTimingsHandler {
+     public final Timing miscMobSpawning;
+     public final Timing chunkInhibitedRangeCheck;
  
 +    public final Timing poiUnload;
 +    public final Timing chunkUnload;
@@ -142,10 +142,10 @@ index 3a79cde59..8de6c4816 100644
      public WorldTimingsHandler(World server) {
          String name = server.worldData.getName() +" - ";
  
-@@ -122,6 +133,17 @@ public class WorldTimingsHandler {
+@@ -120,6 +131,17 @@ public class WorldTimingsHandler {
+ 
+         chunkInhibitedRangeCheck = Timings.ofSafe(name + "Chunks - Inhibited Range Check");
          miscMobSpawning = Timings.ofSafe(name + "Mob spawning - Misc");
-         chunkRangeCheckBig = Timings.ofSafe(name + "Chunk Tick Range - Big");
-         chunkRangeCheckSmall = Timings.ofSafe(name + "Chunk Tick Range - Small");
 +
 +        poiUnload = Timings.ofSafe(name + "Chunk unload - POI");
 +        chunkUnload = Timings.ofSafe(name + "Chunk unload - Chunk");
@@ -2361,7 +2361,7 @@ index 000000000..715a2dd8d
 +
 +}
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index e7c9a969d..2c1937cbe 100644
+index a57371b08..e8166bc81 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -218,11 +218,137 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -3010,7 +3010,7 @@ index ed8c4a87b..996c83263 100644
          return this.a == null ? new NibbleArray() : new NibbleArray((byte[]) this.a.clone());
      }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index b556a8fef..b82ea26eb 100644
+index 50135446f..b38bc6775 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -127,6 +127,18 @@ public class PlayerChunk {
@@ -3041,7 +3041,7 @@ index b556a8fef..b82ea26eb 100644
          PlayerChunk.State playerchunk_state = getChunkState(this.oldTicketLevel);
          PlayerChunk.State playerchunk_state1 = getChunkState(this.ticketLevel);
          // CraftBukkit start
-@@ -384,6 +396,12 @@ public class PlayerChunk {
+@@ -390,6 +402,12 @@ public class PlayerChunk {
                  }
              });
  
@@ -3055,7 +3055,7 @@ index b556a8fef..b82ea26eb 100644
                  completablefuture = (CompletableFuture) this.statusFutures.get(i);
                  if (completablefuture != null) {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 8525c3ab9..85b21012e 100644
+index 5ef1aedbe..a3271d6c2 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -63,7 +63,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -3537,7 +3537,7 @@ index 8525c3ab9..85b21012e 100644
      boolean isOutsideOfRange(ChunkCoordIntPair chunkcoordintpair) {
          // Spigot start
          return isOutsideOfRange(chunkcoordintpair, false);
-@@ -1371,6 +1587,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1370,6 +1586,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      }
  
